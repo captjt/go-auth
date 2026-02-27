@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+  sql-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: goauth
+          POSTGRES_PASSWORD: goauth
+          POSTGRES_DB: goauth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U goauth -d goauth"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: goauth
+          MYSQL_USER: goauth
+          MYSQL_PASSWORD: goauth
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -uroot -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: SQL integration tests
+        env:
+          GOAUTH_TEST_POSTGRES_DSN: postgres://goauth:goauth@localhost:5432/goauth?sslmode=disable
+          GOAUTH_TEST_MYSQL_DSN: goauth:goauth@tcp(localhost:3306)/goauth?parseTime=true
+        run: go test ./storage/sqlstore -run 'TestPostgresIntegration|TestMySQLIntegration'
